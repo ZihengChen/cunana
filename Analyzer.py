@@ -1,69 +1,113 @@
-
-# @author Ziheng Chen
-# @email zihengchen2015@u.northwestern.edu
-# @create date 2020-06-16 17:01:14
-# @modify date 2020-06-16 17:01:14
-
-
+from gpustruct import GPUStruct
 from Utility import *
-from ExampleEP import *
 
 class Analyzer():
     def __init__(self):
-        self.ep = ExampleEP()
+        self.fConf = pd.concat(pd.read_csv(f,index_col="featureName") for f in glob.glob("featureConfig/*.csv"))
+    
+        self.needCumsum_features   = list(self.fConf.query("needCumsum==1").index)
+        self.inMask_features       = list(self.fConf.query("inMask==1").index)
+        self.inSelection_features  = list(self.fConf.query("inSelection==1").index) \
+                                   + ["cumsum_"+f for f in self.needCumsum_features]
+        self.generate_declaration_of_event_structure_cc()
 
+    def generate_declaration_of_event_structure_cc(self):
+
+        code = "struct Events {\n"
         
-    def process_infile(self, infile, nev=None):
+        for f in self.inSelection_features:
+            if "cumsum" in f:
+                fmt = 'int' 
+            else:
+                fmt = self.fConf.loc[f,'type']
+            # cuda does not support array of bool
+            # so we have to convert bool to int
+            if fmt == "bool":
+                fmt = "int"
 
-        eventMask = self.ep.get_mask_for_events_in_file(infile)
-        f = root.TFile(infile)
-        tree = f.Get("Events")
-        if not nev:
-            nev = tree.GetEntriesFast()
-        eventMask = eventMask[:nev]
+            code += "    {} *{};\n".format(fmt, f)
 
-
-        dfs = [list() for _ in range(self.ep.nchannels)]
-        # event loop
-        for iev in tqdm(range(nev)):
-            if not eventMask[iev]:
-                continue
-            tree.GetEntry(iev)
-            self.ep.set_event(tree)
-            self.ep.process_event()
-            # save selected entry in corresponding list
-            if self.ep.out.Channel>=0: 
-                dfs[self.ep.out.Channel].append(self.ep.out.copy())
-            self.ep.clear_event()
+        code += "    int nev;\n"
+        code += "};\n"
+        self.code_event_struct = code
 
 
-        # convert list of series to df
-        dfs = [ pd.DataFrame.from_records(c) for c in dfs]
+    def process_infiles(self):
+        pass
+
+
+    def set_infile(self, infile):
+        self.infile = infile
+        self.tree = uproot.open(infile)["Events"]
+        self.get_mask()
+        # read features
+        self.events = self.tree.arrays( list(self.fConf.index),outputtype=DotDict, flatten=False, namedecode="utf-8" )
+        # apply mask
+        self.events.update( (k, self.events[k][self.mask]) for k in self.events)
+        # flat jagged array
+        self.events.update( (k, self.events[k].flatten()) for k in self.events if type(self.events[k]) is awkward.array.jagged.JaggedArray)
+        # bool to int32 because cuda does not support array of bool
+        self.events.update( (k, self.events[k].astype(np.int32)) for k in self.events if self.events[k].dtype == bool )
+        # add cumsum
+        self.events.update( ("cumsum_"+f, np.cumsum(self.events[f], dtype=np.uint32)) for f in self.needCumsum_features )
+        # add nev
+        self.events.nev = len(self.events.event)
         
-        return dfs
+
+        # create devents
+        deventlist = [( dtype2callable[self.events[f].dtype], "*"+f, self.events[f]) for f in self.inSelection_features]
+        deventlist.append((np.int32, "nev", self.events.nev))
+        self.devents = GPUStruct( deventlist )
+        # copy to gpu
+        self.devents.copy_to_gpu()
+
+    def clear_infile(self):
+        self.events = None
+        del self.devents
+    
+
+    def process_infile(self):
+        self.selection()
+        self.postprocess()
+        self.store()
 
 
-    def process_infiles(self, infiles, outfile):
-        if not type(infiles) == list:
-            infiles = [infiles]
 
-        if(os.path.exists(outfile)):
-            os.remove(outfile)
+    def get_mask(self):
 
-        # open hdf for storage
-        hdf = pd.HDFStore(outfile)
-        # infile loop
-        for infile in infiles:
-            
-            time_start = time.time()
-            dfs = self.process_infile(infile)
-            time_end = time.time()
-            print("time {:6.1f}, {} -> {}".format( time_end - time_start, infile, outfile))
-            # store dfs in hdf outfile using append mode
-            for i in range(self.ep.nchannels):
-                hdf.append(self.ep.channelsNames[i], dfs[i], format='t',  data_columns=True)
+        evts = self.tree.arrays(self.inMask_features, outputtype=DotDict, namedecode="utf-8")
+        mask1 = (evts.HLT_Ele32_WPTight_Gsf) | (evts.HLT_IsoMu24)
+        mask2 = (evts.nElectron>=2) | (evts.nMuon>=2)
+        self.mask = mask1 & mask2
+
+        # # copy features to device
+        # nin = len(features.nElectron)
+        # dfeatures = DotDict({k:cu.gpuarray.to_gpu(features[k]) for k in features})
+        # del features # delete host features
+
+        # # get mask
+        # mask = pycuda.gpuarray.empty(nin, np.int32)
+        # self.knl_mask(mask, dfeatures.HLT_Ele32_WPTight_Gsf, dfeatures.HLT_IsoMu24, dfeatures.nElectron, dfeatures.nMuon)
+        # del dfeatures # delete device features
+
+        # # compact raw index
+        # self.rawindex = parallelCompact(mask).get()
+        # mask = mask.get()
+        # return mask
+
+
+
+  
+    def object_selection(self):
+        knl_objectSelection_electrons(
+            self.devents.get_ptr(), 
+            grid  = (int(self.events.nev/1024)+1,1,1), 
+            block = (1024,1,1)
+            )
         
-        # close hdf file
-        hdf.close()
 
+    def postprocess(self):
+        pass
 
+    def store(self):
+        pass
