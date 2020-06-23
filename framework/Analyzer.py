@@ -1,33 +1,30 @@
 
-from Utilities import *
+from framework.AnalyzerUtilities import *
 
 
 class Analyzer():
     
-    from AnalyzerInitHelper import \
+    from framework.AnalyzerInitCuda import \
+        init_cuda,\
         load_feature_config,\
-        compile_cuda_kernels,\
+        generate_cuda_struct_declaration,\
+        compile_cuda_kernels
+    
+    from framework.AnalyzerInitData import \
         get_mask,\
         init_events,\
         init_events_internal,\
         init_events_out
 
-
-    from ExampleAnalyzer import \
-        config,\
-        object_selection,\
-        event_selection,\
-        postprocess
-
         
     def __init__(self):
-        self.config()
-        self.load_feature_config()
-        self.compile_cuda_kernels()
-        
+        self.profileEvents = False
+        pass
+
 
     def process_infiles(self):
         pass
+
 
     def process_infile(self, infile, outfile):
         # load infile
@@ -36,21 +33,26 @@ class Analyzer():
         self.init_events()
 
         # compute on gpu
+        if self.profileEvents: start = time.time()
         self.copy_events_to_gpu()
         self.object_selection()
         self.event_selection()
         self.copy_events_from_gpu()
         self.clear_devents()
-        self.postprocess()
+        if self.profileEvents: 
+            print( "time totalGPU", time.time()-start)
+        
 
         # stage outfile
+        self.postprocess()
         self.store(outfile)
         self.clear_events()
 
 
-    ########################
-    # dataflow managers
-    ########################
+    ################################################
+    # CPU-GPU dataflow controlling methords
+    ################################################
+
     def copy_events_to_gpu(self):
         self.devents.copy_to_gpu()
         self.deventsInternal.copy_to_gpu()
@@ -65,6 +67,8 @@ class Analyzer():
         del self.deventsOut
 
     def store(self, outfile):
+        print( "eventsOut is ", self.eventsOut)
+        print("this is store data", outfile)
         pass
 
     def clear_events(self):
