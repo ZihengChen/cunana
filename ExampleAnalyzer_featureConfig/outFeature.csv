@@ -1,0 +1,3 @@
+featureName,type,rule,num,isArray
+nPassElectron,int,l,1,1
+nPassMuon,int,l,1,1

@@ -1,0 +1,4 @@
+featureName,type,rule,num,isArray
+MAXNLEPTON,int,v,MAXNLEPTON,0
+iPassElectron,int,l,MAXNLEPTON,1
+iPassMuon,uint,l,MAXNLEPTON,1
