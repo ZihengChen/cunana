@@ -8,7 +8,7 @@ class ExampleAnalyzer(Analyzer):
         super().__init__()
         self.verb = False
 
-        self.baseDir = '/home/zchen/Documents/Analysis/nanoblt'
+        self.baseDir = '/home/zchen/Documents/Analysis/cunana'
 
         self.csvDir = '/ExampleAnalyzer/featureConfig'
         self.featureConfigCSVFiles = [

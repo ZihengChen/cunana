@@ -33,7 +33,6 @@ __device__ P4_PtEtaPhiM lorentz_add( P4_PtEtaPhiM *p1, P4_PtEtaPhiM *p2){
     return q;
 }
 
-// #define M_PI 3.1415926
 // root function return phi in [-pi,pi]
 //https://root.cern.ch/doc/master/TVector2_8cxx_source.html#l00103
 __device__ float phi_mpi_pi(float x){
