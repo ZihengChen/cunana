@@ -26,6 +26,11 @@ import uproot
 from framework.GPUOperators import *
 from framework.GPUStruct import *
 
+def exclusiveCumsum(arr,dtype=np.uint32):
+    neutral = 0
+    res = np.cumsum(arr, dtype=dtype)
+
+    return np.insert(res[:-1],0,neutral)
 
 class DotDict(dict):
     """dot.notation access to dictionary attributes"""

@@ -16,7 +16,7 @@ __global__ void knl_objectSelection_electron(Events *evs, EventsInternal *evsI, 
             if (nPassObject >= evsI->MAXNLEPTON) break;
             
             if( evs->Electron_pt[i] > 20
-                && -2.5 < evs->Electron_eta[i] < 2.5
+                && abs(evs->Electron_eta[i]) < 2.5
                 && evs->Electron_cutBased[i] >= 3
             ){
                 evsI->iPassElectron[iev*evsI->MAXNLEPTON + nPassObject] = i-cumsum_nObject;
@@ -46,7 +46,7 @@ __global__ void knl_objectSelection_muon(Events *evs, EventsInternal *evsI, Even
             if (nPassObject >= evsI->MAXNLEPTON) break;
             
             if( evs->Muon_pt[i] > 10
-                && -2.4 < evs->Muon_eta[i] < 2.4
+                && abs(evs->Muon_eta[i]) < 2.4
                 && evs->Muon_isGlobal[i] == 1
                 && evs->Muon_isPFcand[i] == 1
                 && evs->Muon_tightId[i]  == 1

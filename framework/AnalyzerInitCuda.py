@@ -20,6 +20,7 @@ def load_feature_config(self):
     self.fConf = pd.read_csv(self.featureConfigCSVFiles[0], index_col="featureName")
     print("load inFeatures csv: ", self.featureConfigCSVFiles[0])
     # lists
+    self.needSaveFeatures     = list(self.fConf.query("needSave==1").index)
     self.needCumsumFeatures   = list(self.fConf.query("needCumsum==1").index)
     self.cumsumedFeatures     = ["cumsum_"+k for k in self.needCumsumFeatures]
     self.inMaskFeatures       = list(self.fConf.query("inMask==1").index)
