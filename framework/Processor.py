@@ -62,7 +62,9 @@ class Processor():
             print( "{:35}: {:9.6f}s".format(
                 "time store to hdf", 
                 time.time()-start))
-
+        
+        # clear
+        self.soaManager.clear()
         
     def load_events(self, infile):
         # host SoA
