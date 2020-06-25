@@ -1,5 +1,5 @@
-// MaskEvents is auto-generated from csv file 
-struct MaskEvents{
+// MaskEventsIn is auto-generated from csv file 
+struct MaskEventsIn{
     int nev;
     uint *luminosityBlock;
     int *HLT_Ele32_WPTight_Gsf;
@@ -8,8 +8,8 @@ struct MaskEvents{
     uint *nMuon;
 };
 
-// Events is auto-generated from csv file 
-struct Events{
+// EventsIn is auto-generated from csv file 
+struct EventsIn{
     int nev;
     int *HLT_Ele32_WPTight_Gsf;
     int *HLT_IsoMu24;
@@ -35,8 +35,8 @@ struct Events{
     uint *cumsum_nMuon;
 };
 
-// EventsInternal is auto-generated from csv file 
-struct EventsInternal{
+// EventsMid is auto-generated from csv file 
+struct EventsMid{
     int MAXNLEPTON;
     int *iPassElectron;
     uint *iPassMuon;
@@ -114,13 +114,13 @@ __device__ float phi_mpi_pi(float x){
 //   mask   //
 //////////////
 
-__global__ void knl_mask(MaskEvents *evs, bool *mask) {
+__global__ void knl_mask(MaskEventsIn *evsI, bool *mask) {
 
     int iev = blockDim.x*blockIdx.x + threadIdx.x;
-    if (iev < evs->nev) {  
+    if (iev < evsI->nev) {  
         bool isPass = false;
-        if ( (evs->HLT_Ele32_WPTight_Gsf[iev] || evs->HLT_IsoMu24[iev]) 
-            && (evs->nElectron[iev]>=2 || evs->nMuon[iev]>=2)
+        if ( (evsI->HLT_Ele32_WPTight_Gsf[iev] || evsI->HLT_IsoMu24[iev]) 
+            && (evsI->nElectron[iev]>=2 || evsI->nMuon[iev]>=2)
             ){
                 isPass = true;
             }
@@ -129,26 +129,27 @@ __global__ void knl_mask(MaskEvents *evs, bool *mask) {
 }
 
 
+
 //////////////////
 // obj-electron //
 //////////////////
-__global__ void knl_objectSelection_electron(Events *evs, EventsInternal *evsI, EventsOut *evsO) {
+__global__ void knl_objectSelection_electron(EventsIn *evsI, EventsMid *evsM, EventsOut *evsO) {
     int iev = blockDim.x*blockIdx.x + threadIdx.x;
-    if (iev < evs->nev) {    
+    if (iev < evsI->nev) {    
 
-        const int cumsum_nObject = evs->cumsum_nElectron[iev];
-        const int nObject = evs->nElectron[iev]; 
+        const int cumsum_nObject = evsI->cumsum_nElectron[iev];
+        const int nObject = evsI->nElectron[iev]; 
         
         int nPassObject = 0;
         // loop over all enectrons in the event
         for( int i = cumsum_nObject; i < cumsum_nObject + nObject; i++){
-            if (nPassObject >= evsI->MAXNLEPTON) break;
+            if (nPassObject >= evsM->MAXNLEPTON) break;
             
-            if( evs->Electron_pt[i] > 20
-                && abs(evs->Electron_eta[i]) < 2.5
-                && evs->Electron_cutBased[i] >= 3
+            if( evsI->Electron_pt[i] > 20
+                && abs(evsI->Electron_eta[i]) < 2.5
+                && evsI->Electron_cutBased[i] >= 3
             ){
-                evsI->iPassElectron[iev*evsI->MAXNLEPTON + nPassObject] = i-cumsum_nObject;
+                evsM->iPassElectron[iev*evsM->MAXNLEPTON + nPassObject] = i-cumsum_nObject;
                 nPassObject++;
             }
         } // end of loop
@@ -161,26 +162,26 @@ __global__ void knl_objectSelection_electron(Events *evs, EventsInternal *evsI, 
 //////////////////
 //    obj-muon  //
 //////////////////
-__global__ void knl_objectSelection_muon(Events *evs, EventsInternal *evsI, EventsOut *evsO) {
+__global__ void knl_objectSelection_muon(EventsIn *evsI, EventsMid *evsM, EventsOut *evsO) {
     int iev = blockDim.x*blockIdx.x + threadIdx.x;
-    if (iev < evs->nev) {        
+    if (iev < evsI->nev) {        
         
-        const int cumsum_nObject = evs->cumsum_nMuon[iev];
-        const int nObject = evs->nMuon[iev]; 
+        const int cumsum_nObject = evsI->cumsum_nMuon[iev];
+        const int nObject = evsI->nMuon[iev]; 
 
         int nPassObject = 0;
 
         // loop over all enectrons in the event
         for( int i = cumsum_nObject; i < cumsum_nObject + nObject; i++){
-            if (nPassObject >= evsI->MAXNLEPTON) break;
+            if (nPassObject >= evsM->MAXNLEPTON) break;
             
-            if( evs->Muon_pt[i] > 10
-                && abs(evs->Muon_eta[i]) < 2.4
-                && evs->Muon_isGlobal[i] == 1
-                && evs->Muon_isPFcand[i] == 1
-                && evs->Muon_tightId[i]  == 1
+            if( evsI->Muon_pt[i] > 10
+                && abs(evsI->Muon_eta[i]) < 2.4
+                && evsI->Muon_isGlobal[i] == 1
+                && evsI->Muon_isPFcand[i] == 1
+                && evsI->Muon_tightId[i]  == 1
             ){
-                evsI->iPassMuon[iev*evsI->MAXNLEPTON + nPassObject] = i-cumsum_nObject;
+                evsM->iPassMuon[iev*evsM->MAXNLEPTON + nPassObject] = i-cumsum_nObject;
                 nPassObject++;
             }
         } // end of loop
@@ -189,36 +190,38 @@ __global__ void knl_objectSelection_muon(Events *evs, EventsInternal *evsI, Even
 }
 
 
+
+
 //////////////////
 // event selection
 //////////////////
 
-__global__ void knl_eventSelection(Events *evs, EventsInternal *evsI, EventsOut *evsO) {
+__global__ void knl_eventSelection(EventsIn *evsI, EventsMid *evsM, EventsOut *evsO) {
     int iev = blockDim.x*blockIdx.x + threadIdx.x;
-    if (iev < evs->nev) {    
+    if (iev < evsI->nev) {    
 
-        int MAXNLEPTON = evsI->MAXNLEPTON;
+        int MAXNLEPTON = evsM->MAXNLEPTON;
         struct P4_PtEtaPhiM lep1, lep2, dilepton;
 
         evsO->channel[iev] = -1;
 
-        if (evs->HLT_Ele32_WPTight_Gsf[iev]==1 && evsO->nPassElectron[iev]>=2 && evsO->nPassMuon[iev]==0){
+        if (evsI->HLT_Ele32_WPTight_Gsf[iev]==1 && evsO->nPassElectron[iev]>=2 && evsO->nPassMuon[iev]==0){
             
             // get index
-            int l1 = evsI->iPassElectron[iev*MAXNLEPTON+0] + evs->cumsum_nElectron[iev];
-            int l2 = evsI->iPassElectron[iev*MAXNLEPTON+1] + evs->cumsum_nElectron[iev];
+            int l1 = evsM->iPassElectron[iev*MAXNLEPTON+0] + evsI->cumsum_nElectron[iev];
+            int l2 = evsM->iPassElectron[iev*MAXNLEPTON+1] + evsI->cumsum_nElectron[iev];
             
             // pt threshold
-            if (evs->Electron_pt[l1]<32 || evs->Electron_pt[l2]<20) return;
+            if (evsI->Electron_pt[l1]<32 || evsI->Electron_pt[l2]<20) return;
             
 
             // opposite sign
-            if (evs->Electron_pdgId[l1] * evs->Electron_pdgId[l2] > 0) return;
+            if (evsI->Electron_pdgId[l1] * evsI->Electron_pdgId[l2] > 0) return;
 
             
             // dilepton mass veto
-            lep1 = {evs->Electron_pt[l1], evs->Electron_eta[l1], evs->Electron_phi[l1], evs->Electron_mass[l1]};
-            lep2 = {evs->Electron_pt[l2], evs->Electron_eta[l2], evs->Electron_phi[l2], evs->Electron_mass[l2]};
+            lep1 = {evsI->Electron_pt[l1], evsI->Electron_eta[l1], evsI->Electron_phi[l1], evsI->Electron_mass[l1]};
+            lep2 = {evsI->Electron_pt[l2], evsI->Electron_eta[l2], evsI->Electron_phi[l2], evsI->Electron_mass[l2]};
             dilepton = lorentz_add(&lep1, &lep2);
 
 
@@ -227,30 +230,30 @@ __global__ void knl_eventSelection(Events *evs, EventsInternal *evsI, EventsOut 
 
             // fillout evsO
             evsO->channel[iev] = 0;
-            evsO->lepton1Pdgid[iev] = evs->Electron_pdgId[l1];
-            evsO->lepton2Pdgid[iev] = evs->Electron_pdgId[l2];
-            evsO->lepton1Reliso[iev] = evs->Electron_pfRelIso03_all[l1];
-            evsO->lepton2Reliso[iev] = evs->Electron_pfRelIso03_all[l2];
+            evsO->lepton1Pdgid[iev] = evsI->Electron_pdgId[l1];
+            evsO->lepton2Pdgid[iev] = evsI->Electron_pdgId[l2];
+            evsO->lepton1Reliso[iev] = evsI->Electron_pfRelIso03_all[l1];
+            evsO->lepton2Reliso[iev] = evsI->Electron_pfRelIso03_all[l2];
 
 
 
 
-        } else if (evs->HLT_IsoMu24[iev]==1 && evsO->nPassElectron[iev]==0 && evsO->nPassMuon[iev]>=2){
+        } else if (evsI->HLT_IsoMu24[iev]==1 && evsO->nPassElectron[iev]==0 && evsO->nPassMuon[iev]>=2){
             
             // get index
-            int l1 = evsI->iPassMuon[iev*MAXNLEPTON+0] + evs->cumsum_nMuon[iev];
-            int l2 = evsI->iPassMuon[iev*MAXNLEPTON+1] + evs->cumsum_nMuon[iev];
+            int l1 = evsM->iPassMuon[iev*MAXNLEPTON+0] + evsI->cumsum_nMuon[iev];
+            int l2 = evsM->iPassMuon[iev*MAXNLEPTON+1] + evsI->cumsum_nMuon[iev];
             
             // pt threshold
-            if (evs->Muon_pt[l1]<27 || evs->Muon_pt[l2]<10) return;
+            if (evsI->Muon_pt[l1]<27 || evsI->Muon_pt[l2]<10) return;
             
 
             // opposite sign
-            if (evs->Muon_pdgId[l1] * evs->Muon_pdgId[l2] > 0) return;
+            if (evsI->Muon_pdgId[l1] * evsI->Muon_pdgId[l2] > 0) return;
             
             // dilepton mass veto
-            lep1 = {evs->Muon_pt[l1], evs->Muon_eta[l1], evs->Muon_phi[l1], evs->Muon_mass[l1]};
-            lep2 = {evs->Muon_pt[l2], evs->Muon_eta[l2], evs->Muon_phi[l2], evs->Muon_mass[l2]};
+            lep1 = {evsI->Muon_pt[l1], evsI->Muon_eta[l1], evsI->Muon_phi[l1], evsI->Muon_mass[l1]};
+            lep2 = {evsI->Muon_pt[l2], evsI->Muon_eta[l2], evsI->Muon_phi[l2], evsI->Muon_mass[l2]};
             dilepton = lorentz_add(&lep1, &lep2);    
 
 
@@ -258,10 +261,10 @@ __global__ void knl_eventSelection(Events *evs, EventsInternal *evsI, EventsOut 
             
             // fillout evsO
             evsO->channel[iev] = 1;
-            evsO->lepton1Pdgid[iev] = evs->Muon_pdgId[l1];
-            evsO->lepton2Pdgid[iev] = evs->Muon_pdgId[l2];
-            evsO->lepton1Reliso[iev] = evs->Muon_pfRelIso03_all[l1];
-            evsO->lepton2Reliso[iev] = evs->Muon_pfRelIso03_all[l2];
+            evsO->lepton1Pdgid[iev] = evsI->Muon_pdgId[l1];
+            evsO->lepton2Pdgid[iev] = evsI->Muon_pdgId[l2];
+            evsO->lepton1Reliso[iev] = evsI->Muon_pfRelIso03_all[l1];
+            evsO->lepton2Reliso[iev] = evsI->Muon_pfRelIso03_all[l2];
 
 
         }
@@ -296,3 +299,4 @@ __global__ void knl_eventSelection(Events *evs, EventsInternal *evsI, EventsOut 
 
     }
 }
+

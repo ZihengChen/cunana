@@ -1,5 +1,17 @@
-import numpy as np
 
+
+# system
+import glob
+import os
+import time
+import multiprocessing
+from tqdm import tqdm
+# numeric data processing
+import numpy as np
+import pandas as pd
+import awkward
+# root io
+import uproot
 # cuda
 import pycuda as cu
 import pycuda.autoinit
@@ -8,8 +20,30 @@ import pycuda.scan
 import pycuda.elementwise
 import pycuda.compiler
 import pycuda.driver as cuda
+# comstumized
+from framework.GPUStruct import GPUStruct
 
 
+MAXNLEPTON = 4
+
+def exclusiveCumsum(arr,dtype=np.uint32):
+    neutral = 0
+    res = np.cumsum(arr, dtype=dtype)
+
+    return np.insert(res[:-1],0,neutral)
+
+class DotDict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+
+
+
+######################################
+# not used so far
+######################################
 knl_exsumscan = cu.scan.ExclusiveScanKernel(np.int32, "a+b", neutral=0)
 
 knl_compact = cu.compiler.SourceModule("""
